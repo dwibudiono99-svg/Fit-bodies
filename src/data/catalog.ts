@@ -1,6 +1,22 @@
-import { GarmentItem, OccasionType, StudioModelPreset } from "../types/studio";
+import { BodyLandmarks, GarmentItem, OccasionType, StudioModelPreset } from "../types/studio";
 
 export const HERO_STUDIO_IMAGE = "/src/assets/images/studio_hero_editorial_1794811468737.jpg";
+
+export const DEFAULT_LANDMARKS: BodyLandmarks = {
+  neckY: 17.5,
+  leftShoulderX: 33.5,
+  leftShoulderY: 20.5,
+  rightShoulderX: 66.5,
+  rightShoulderY: 20.5,
+  chestWidthPct: 31,
+  waistY: 42,
+  waistWidthPct: 26.5,
+  hipY: 53,
+  hipWidthPct: 29.5,
+  hemY: 89,
+  brightness: 1.0,
+  contrast: 1.02,
+};
 
 export const OCCASION_LABELS: Record<OccasionType, { title: string; subtitle: string; detail: string }> = {
   bepergian: {
@@ -27,6 +43,15 @@ export const BODY_SHAPE_OPTIONS = [
   { id: "berisi", label: "Berisi / Plus", desc: "Ruang ekstra di dada dan perut" },
   { id: "bahu-lebar", label: "Bahu Lebar", desc: "Membutuhkan struktur bahu natural" },
   { id: "jam-pasir", label: "Jam Pasir / Pir", desc: "Pinggang tegas dengan siluet melengkung" },
+] as const;
+
+export const BODY_CONDITION_OPTIONS = [
+  { id: "standar", label: "Postur Seimbang (Standar)" },
+  { id: "perut-berisi", label: "Bagian Perut / Pinggang Berisi" },
+  { id: "dada-bidang", label: "Dada Bidang & Bahu Tegap" },
+  { id: "bahu-miring", label: "Kemiringan Bahu Asimetris" },
+  { id: "torso-pendek", label: "Torso Pendek / Pinggang Tinggi" },
+  { id: "torso-panjang", label: "Torso Panjang / Pinggang Rendah" },
 ] as const;
 
 export const STUDIO_MODEL_PRESETS: StudioModelPreset[] = [
@@ -67,12 +92,13 @@ export const GARMENT_CATALOG: GarmentItem[] = [
     protocolNote: "Cocok untuk perjalanan dinas luar kota, kunjungan proyek, dan transit.",
     defaultAnchors: {
       offsetXPct: 0,
-      offsetYPct: 2,
+      offsetYPct: 0,
       widthScalePct: 92,
-      heightScalePct: 95,
+      heightScalePct: 96,
       shoulderWidthRatio: 1.0,
       waistTaper: 0.96,
-      opacity: 0.94,
+      opacity: 0.96,
+      landmarks: DEFAULT_LANDMARKS,
     },
   },
   {
@@ -89,12 +115,13 @@ export const GARMENT_CATALOG: GarmentItem[] = [
     protocolNote: "Standar ideal untuk rapat direksi, presentasi bisnis, dan pertemuan formal tanpa dasi.",
     defaultAnchors: {
       offsetXPct: 0,
-      offsetYPct: 1,
+      offsetYPct: 0,
       widthScalePct: 90,
       heightScalePct: 96,
       shoulderWidthRatio: 1.02,
       waistTaper: 0.92,
-      opacity: 0.95,
+      opacity: 0.96,
+      landmarks: DEFAULT_LANDMARKS,
     },
   },
   {
@@ -111,12 +138,13 @@ export const GARMENT_CATALOG: GarmentItem[] = [
     protocolNote: "Memenuhi etika acara kenegaraan, pelantikan, dan rapat koordinasi instansi.",
     defaultAnchors: {
       offsetXPct: 0,
-      offsetYPct: 1,
-      widthScalePct: 88,
+      offsetYPct: 0,
+      widthScalePct: 89,
       heightScalePct: 96,
       shoulderWidthRatio: 0.98,
       waistTaper: 0.94,
-      opacity: 0.95,
+      opacity: 0.96,
+      landmarks: DEFAULT_LANDMARKS,
     },
   },
   {
@@ -133,12 +161,20 @@ export const GARMENT_CATALOG: GarmentItem[] = [
     protocolNote: "Memberikan siluet tegas nan elegan untuk pertemuan korporat dan diplomasi.",
     defaultAnchors: {
       offsetXPct: 0,
-      offsetYPct: 1,
-      widthScalePct: 86,
+      offsetYPct: 0,
+      widthScalePct: 88,
       heightScalePct: 96,
       shoulderWidthRatio: 0.98,
       waistTaper: 0.9,
-      opacity: 0.95,
+      opacity: 0.96,
+      landmarks: {
+        ...DEFAULT_LANDMARKS,
+        leftShoulderX: 35.5,
+        rightShoulderX: 64.5,
+        chestWidthPct: 28,
+        waistWidthPct: 22.5,
+        hipWidthPct: 30.5,
+      },
     },
   },
   {
@@ -155,12 +191,21 @@ export const GARMENT_CATALOG: GarmentItem[] = [
     protocolNote: "Sesuai standar busana nasional resmi untuk upacara, audiensi, dan acara instansi.",
     defaultAnchors: {
       offsetXPct: 0,
-      offsetYPct: 2,
-      widthScalePct: 86,
+      offsetYPct: 0,
+      widthScalePct: 88,
       heightScalePct: 94,
       shoulderWidthRatio: 0.97,
       waistTaper: 0.88,
-      opacity: 0.95,
+      opacity: 0.96,
+      landmarks: {
+        ...DEFAULT_LANDMARKS,
+        leftShoulderX: 35.5,
+        rightShoulderX: 64.5,
+        chestWidthPct: 28,
+        waistWidthPct: 22,
+        hipWidthPct: 30,
+        hemY: 82,
+      },
     },
   },
 ];

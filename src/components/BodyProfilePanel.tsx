@@ -1,8 +1,13 @@
 import React, { useRef } from "react";
 import { Upload, Sparkles, UserCheck, RotateCcw } from "lucide-react";
-import { BODY_SHAPE_OPTIONS, STUDIO_MODEL_PRESETS } from "../data/catalog";
+import {
+  BODY_CONDITION_OPTIONS,
+  BODY_SHAPE_OPTIONS,
+  STUDIO_MODEL_PRESETS,
+} from "../data/catalog";
 import {
   BodyAnalysisResponse,
+  BodyConditionFlag,
   BodyProfile,
   BodyShapeType,
   FitPreferenceType,
@@ -60,9 +65,9 @@ export function BodyProfilePanel({
   };
 
   return (
-    <div className="flex flex-col gap-6 rounded-xl border border-[#E4E6EA] bg-white p-5">
+    <div className="flex flex-col gap-5 rounded-xl border border-[#E4E6EA] bg-white p-5">
       <div>
-        <div className="text-xs font-medium text-[#6B7280]">01. Sumber Model & Foto</div>
+        <div className="text-xs font-medium text-[#6B7280]">01. Sumber Model & Kondisi Tubuh</div>
         <h3 className="mt-1 text-base font-semibold text-[#111315]">Model & Kalibrasi Tubuh</h3>
       </div>
 
@@ -137,9 +142,6 @@ export function BodyProfilePanel({
             </button>
           )}
         </div>
-        <p className="text-[11px] leading-relaxed text-[#6B7280]">
-          Gunakan foto berdiri menghadap depan dengan pencahayaan merata untuk hasil kalibrasi terbaik.
-        </p>
       </div>
 
       <hr className="border-[#E4E6EA]" />
@@ -188,6 +190,25 @@ export function BodyProfilePanel({
             );
           })}
         </div>
+      </div>
+
+      {/* Specific Body Condition */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="body-condition-select" className="text-xs font-semibold text-[#111315]">
+          Kondisi Postur & Tubuh Khusus
+        </label>
+        <select
+          id="body-condition-select"
+          value={profile.bodyCondition}
+          onChange={(e) => updateField("bodyCondition", e.target.value as BodyConditionFlag)}
+          className="w-full rounded-lg border border-[#E4E6EA] bg-white px-3 py-2 text-xs font-medium text-[#111315] focus:border-[#1D4ED8] focus:outline-none"
+        >
+          {BODY_CONDITION_OPTIONS.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Numeric Measurements */}
@@ -265,7 +286,7 @@ export function BodyProfilePanel({
       >
         <Sparkles className="h-3.5 w-3.5 shrink-0" />
         <span className="whitespace-nowrap">
-          {isAnalyzing ? "Menganalisis Proporsi..." : "Analisis Bentuk Tubuh AI"}
+          {isAnalyzing ? "Memetakan Titik Tubuh..." : "Deteksi Titik Tubuh AI"}
         </span>
       </button>
 

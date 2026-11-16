@@ -22,6 +22,7 @@ import {
   OccasionType,
   SavedLookbookEntry,
 } from "./types/studio";
+import { deriveLandmarksFromProfile } from "./utils/canvasComposite";
 
 const LOOKBOOK_STORAGE_KEY = "rupafit_lookbook_v1";
 
@@ -37,6 +38,7 @@ export default function App() {
   const [profile, setProfile] = useState<BodyProfile>({
     gender: STUDIO_MODEL_PRESETS[0].gender,
     bodyShape: STUDIO_MODEL_PRESETS[0].bodyShape,
+    bodyCondition: "standar",
     heightCm: STUDIO_MODEL_PRESETS[0].heightCm,
     weightKg: STUDIO_MODEL_PRESETS[0].weightKg,
     size: "M",
@@ -49,9 +51,18 @@ export default function App() {
   const [customGarmentImageUrl, setCustomGarmentImageUrl] = useState<string | null>(null);
   const [customNotes, setCustomNotes] = useState("");
   const [backdrop, setBackdrop] = useState<BackdropType>("studio");
-  const [anchors, setAnchors] = useState<GarmentOverlayAnchors>(
-    GARMENT_CATALOG[1].defaultAnchors
-  );
+  const [anchors, setAnchors] = useState<GarmentOverlayAnchors>(() => ({
+    ...GARMENT_CATALOG[1].defaultAnchors,
+    landmarks: deriveLandmarksFromProfile({
+      gender: STUDIO_MODEL_PRESETS[0].gender,
+      bodyShape: STUDIO_MODEL_PRESETS[0].bodyShape,
+      bodyCondition: "standar",
+      heightCm: STUDIO_MODEL_PRESETS[0].heightCm,
+      weightKg: STUDIO_MODEL_PRESETS[0].weightKg,
+      size: "M",
+      fitPreference: "regular",
+    }),
+  }));
 
   // AI Endpoints State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -93,17 +104,30 @@ export default function App() {
     }
   };
 
+  const handleProfileChange = (nextProfile: BodyProfile) => {
+    setProfile(nextProfile);
+    setAnchors((prev) => ({
+      ...prev,
+      landmarks: deriveLandmarksFromProfile(nextProfile),
+    }));
+  };
+
   const handleSelectPreset = (presetId: string) => {
     const preset = STUDIO_MODEL_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
     setModelSource("preset");
     setSelectedPresetId(preset.id);
-    setProfile((prev) => ({
-      ...prev,
+    const nextProfile: BodyProfile = {
+      ...profile,
       gender: preset.gender,
       bodyShape: preset.bodyShape,
       heightCm: preset.heightCm,
       weightKg: preset.weightKg,
+    };
+    setProfile(nextProfile);
+    setAnchors((prev) => ({
+      ...prev,
+      landmarks: deriveLandmarksFromProfile(nextProfile),
     }));
     setAnalysisResult(null);
     setFittingResult(null);
@@ -129,7 +153,10 @@ export default function App() {
     setCustomGarmentImageUrl(null);
     setSelectedGarment(garment);
     setOccasion(garment.occasion);
-    setAnchors(garment.defaultAnchors);
+    setAnchors({
+      ...garment.defaultAnchors,
+      landmarks: deriveLandmarksFromProfile(profile),
+    });
     setFittingResult(null);
   };
 
@@ -160,21 +187,17 @@ export default function App() {
           garmentCategory: OCCASION_LABELS[occasion].title,
         }),
       });
-      const data = await res.json();
+      const data: BodyAnalysisResponse & { error?: string } = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Gagal menganalisis proporsi tubuh.");
       }
       setAnalysisResult(data);
-      if (data.anchors) {
+      if (data.landmarks) {
         setAnchors((prev) => ({
           ...prev,
-          offsetXPct: Math.max(-15, Math.min(15, Math.round((data.anchors.centerX - 50) * 0.7))),
-          offsetYPct: Math.max(-12, Math.min(18, Math.round(data.anchors.shoulderY - 21))),
-          widthScalePct: Math.max(
-            70,
-            Math.min(125, Math.round((data.anchors.shoulderWidthPct / 38) * 90))
-          ),
-          waistTaper: data.anchors.waistTaperRatio ?? prev.waistTaper,
+          offsetXPct: 0,
+          offsetYPct: 0,
+          landmarks: data.landmarks,
         }));
       }
     } catch (err) {
@@ -208,13 +231,20 @@ export default function App() {
         throw new Error(data.error || "Gagal mengkalibrasi fitting AI.");
       }
       setFittingResult(data);
-      if (data.calibration) {
+      if (data.landmarks || data.calibration) {
         setAnchors((prev) => ({
           ...prev,
-          offsetXPct: Math.max(-15, Math.min(15, Math.round(data.calibration.offsetXPct))),
-          offsetYPct: Math.max(-15, Math.min(18, Math.round(data.calibration.offsetYPct))),
-          widthScalePct: Math.max(68, Math.min(130, Math.round(data.calibration.widthScalePct))),
-          heightScalePct: Math.max(72, Math.min(128, Math.round(data.calibration.heightScalePct))),
+          offsetXPct: Math.max(-15, Math.min(15, Math.round(data.calibration?.offsetXPct ?? 0))),
+          offsetYPct: Math.max(-15, Math.min(18, Math.round(data.calibration?.offsetYPct ?? 0))),
+          widthScalePct: Math.max(
+            68,
+            Math.min(130, Math.round(data.calibration?.widthScalePct ?? prev.widthScalePct))
+          ),
+          heightScalePct: Math.max(
+            72,
+            Math.min(128, Math.round(data.calibration?.heightScalePct ?? prev.heightScalePct))
+          ),
+          landmarks: data.landmarks ?? prev.landmarks,
         }));
       }
     } catch (err) {
@@ -259,15 +289,15 @@ export default function App() {
             <div className="flex flex-col justify-between rounded-xl border border-[#E4E6EA] bg-white p-8 lg:col-span-6 lg:p-10">
               <div>
                 <div className="text-xs font-medium text-[#6B7280]">
-                  Studio Fitting Digital · Referensi Busana Terkurasi
+                  Studio Fitting Digital · Kalibrasi Kontur Tubuh AI
                 </div>
                 <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.12] tracking-tight text-[#111315] text-balance sm:text-5xl">
-                  Uji Kesesuaian Busana Sebelum Melangkah ke Setiap Agenda Penting
+                  Uji Kesesuaian Busana yang Pas Mengikuti Kondisi Tubuh Anda
                 </h1>
                 <p className="mt-5 max-w-xl text-base leading-relaxed text-[#4B5563]">
                   Sesuaikan model pakaian untuk kebutuhan bepergian, pertemuan resmi biasa, hingga
-                  tugas kedinasan. Unggah foto Anda sendiri dan biarkan sistem AI mengkalibrasi
-                  potongan busana mengikuti proporsi tubuh secara presisi.
+                  tugas kedinasan. Unggah foto Anda sendiri dan biarkan sistem AI memetakan titik
+                  bahu, dada, pinggang, dan pinggul agar busana menempel pas sesuai postur tubuh.
                 </p>
               </div>
 
@@ -310,8 +340,8 @@ export default function App() {
               },
               {
                 num: "02.",
-                title: "Kalibrasi Bentuk Tubuh AI",
-                desc: "Analisis tinggi, berat, lebar bahu, dan siluet untuk akurasi jatuh kain.",
+                title: "Kontur Tubuh Adaptif",
+                desc: "AI menyesuaikan lekuk bahu, dada, pinggang, dan pinggul secara dinamis.",
               },
               {
                 num: "03.",
@@ -371,7 +401,7 @@ export default function App() {
                 onSelectPreset={handleSelectPreset}
                 onUploadModelPhoto={handleUploadModelPhoto}
                 onClearUploadedPhoto={handleClearUploadedPhoto}
-                onChangeProfile={setProfile}
+                onChangeProfile={handleProfileChange}
                 onAnalyzeBody={handleAnalyzeBody}
               />
             </div>
@@ -391,7 +421,12 @@ export default function App() {
                 fittingError={fittingError}
                 onChangeBackdrop={setBackdrop}
                 onChangeAnchors={setAnchors}
-                onResetAnchors={() => setAnchors(selectedGarment.defaultAnchors)}
+                onResetAnchors={() =>
+                  setAnchors({
+                    ...selectedGarment.defaultAnchors,
+                    landmarks: deriveLandmarksFromProfile(profile),
+                  })
+                }
                 onGenerateAiFitting={handleGenerateAiFitting}
                 onSaveLookbook={handleSaveLookbook}
               />

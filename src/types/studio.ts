@@ -10,9 +10,18 @@ export type BodyShapeType =
 export type FitPreferenceType = "slim" | "regular" | "relaxed";
 export type BackdropType = "studio" | "perjalanan" | "rapat" | "kedinasan";
 
+export type BodyConditionFlag =
+  | "standar"
+  | "bahu-miring"
+  | "perut-berisi"
+  | "torso-pendek"
+  | "torso-panjang"
+  | "dada-bidang";
+
 export interface BodyProfile {
   gender: GenderType;
   bodyShape: BodyShapeType;
+  bodyCondition: BodyConditionFlag;
   heightCm: number;
   weightKg: number;
   size: "S" | "M" | "L" | "XL" | "XXL";
@@ -30,6 +39,22 @@ export interface StudioModelPreset {
   description: string;
 }
 
+export interface BodyLandmarks {
+  neckY: number; // % from top (12 - 26)
+  leftShoulderX: number; // % from left (22 - 42)
+  leftShoulderY: number; // % from top (15 - 30)
+  rightShoulderX: number; // % from left (58 - 78)
+  rightShoulderY: number; // % from top (15 - 30)
+  chestWidthPct: number; // % of canvas width (22 - 48)
+  waistY: number; // % from top (34 - 50)
+  waistWidthPct: number; // % of canvas width (18 - 46)
+  hipY: number; // % from top (46 - 62)
+  hipWidthPct: number; // % of canvas width (22 - 50)
+  hemY: number; // % from top (76 - 96)
+  brightness: number; // 0.85 - 1.15
+  contrast: number; // 0.9 - 1.15
+}
+
 export interface GarmentOverlayAnchors {
   offsetXPct: number;
   offsetYPct: number;
@@ -38,6 +63,7 @@ export interface GarmentOverlayAnchors {
   shoulderWidthRatio: number;
   waistTaper: number;
   opacity: number;
+  landmarks: BodyLandmarks;
 }
 
 export interface GarmentItem {
@@ -57,13 +83,7 @@ export interface GarmentItem {
 
 export interface BodyAnalysisResponse {
   silhouetteSummary: string;
-  anchors: {
-    centerX: number;
-    shoulderY: number;
-    shoulderWidthPct: number;
-    torsoHeightPct: number;
-    waistTaperRatio: number;
-  };
+  landmarks: BodyLandmarks;
   tailoringSpecs: {
     shoulderCut: string;
     jacketLength: string;
@@ -81,6 +101,7 @@ export interface BodyAnalysisResponse {
 }
 
 export interface FittingCalibrationResponse {
+  landmarks: BodyLandmarks;
   calibration: {
     offsetXPct: number;
     offsetYPct: number;

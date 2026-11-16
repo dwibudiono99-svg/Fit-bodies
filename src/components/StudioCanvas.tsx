@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, Download, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Bookmark, Crosshair, Download, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
 import { OCCASION_LABELS } from "../data/catalog";
 import {
   BackdropType,
+  BodyLandmarks,
   BodyProfile,
   FittingCalibrationResponse,
   GarmentItem,
@@ -52,6 +53,7 @@ export function StudioCanvas({
   const [viewMode, setViewMode] = useState<ViewMode>("fitting");
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [showSliders, setShowSliders] = useState(false);
+  const [showLandmarkGuides, setShowLandmarkGuides] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [renderFailed, setRenderFailed] = useState(false);
 
@@ -70,6 +72,7 @@ export function StudioCanvas({
       profile,
       backdrop,
       showGarmentOverlay: viewMode !== "asli",
+      showLandmarkGuides,
       splitRatio: viewMode === "bandingkan" ? splitRatio : undefined,
     }).catch(() => {
       if (!cancelled) setRenderFailed(true);
@@ -78,7 +81,16 @@ export function StudioCanvas({
     return () => {
       cancelled = true;
     };
-  }, [modelImageUrl, activeGarmentUrl, anchors, profile, backdrop, viewMode, splitRatio]);
+  }, [
+    modelImageUrl,
+    activeGarmentUrl,
+    anchors,
+    profile,
+    backdrop,
+    viewMode,
+    showLandmarkGuides,
+    splitRatio,
+  ]);
 
   const handleDownloadPng = () => {
     const canvas = canvasRef.current;
@@ -99,12 +111,26 @@ export function StudioCanvas({
     setTimeout(() => setSavedFeedback(false), 2000);
   };
 
+  const updateLandmark = <K extends keyof BodyLandmarks>(key: K, value: BodyLandmarks[K]) => {
+    onChangeAnchors({
+      ...anchors,
+      landmarks: {
+        ...anchors.landmarks,
+        [key]: value,
+      },
+    });
+  };
+
   const backdropOptions: Array<{ id: BackdropType; label: string }> = [
     { id: "studio", label: "Studio Netral" },
     { id: "perjalanan", label: "Lobi Perjalanan" },
     { id: "rapat", label: "Ruang Rapat" },
     { id: "kedinasan", label: "Aula Kedinasan" },
   ];
+
+  const shoulderSpanPct = Math.round(
+    anchors.landmarks.rightShoulderX - anchors.landmarks.leftShoulderX
+  );
 
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-[#E4E6EA] bg-white p-5">
@@ -178,17 +204,17 @@ export function StudioCanvas({
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/75 backdrop-blur-xs">
               <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#E4E6EA] border-t-[#1D4ED8]" />
               <p className="mt-3 text-xs font-semibold text-[#111315]">
-                Menyesuaikan proporsi busana dengan bentuk tubuh...
+                Membentuk pola pakaian mengikuti kontur & kondisi tubuh...
               </p>
             </div>
           )}
         </div>
 
-        {/* Bottom Scrim Bar for Quick Body Metadata */}
+        {/* Bottom Metadata Strip */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E4E6EA] bg-white px-4 py-2.5 text-xs text-[#4B5563]">
           <span className="tabular-nums">
-            {profile.gender === "pria" ? "Pria" : "Wanita"} · {profile.heightCm} cm · {profile.weightKg} kg · Ukuran{" "}
-            {profile.size}
+            Bahu {shoulderSpanPct}% · Pinggang {Math.round(anchors.landmarks.waistWidthPct)}% · Pinggul{" "}
+            {Math.round(anchors.landmarks.hipWidthPct)}%
           </span>
           <span className="font-medium text-[#111315]">
             {fittingResult ? fittingResult.fitAssessment.fitVerdict : garment.cut}
@@ -214,8 +240,8 @@ export function StudioCanvas({
         </div>
       )}
 
-      {/* Backdrop Selector + Fine-Tuning Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Backdrop Selector + Landmark & Contour Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {backdropOptions.map((item) => (
             <button
@@ -233,27 +259,82 @@ export function StudioCanvas({
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowSliders((prev) => !prev)}
-          className="flex items-center gap-1.5 rounded-md border border-[#E4E6EA] bg-white px-3 py-1.5 text-xs font-medium text-[#111315] hover:bg-[#F8F9FA] cursor-pointer whitespace-nowrap"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          <span>{showSliders ? "Tutup Presisi Manual" : "Atur Presisi Manual"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLandmarkGuides((prev) => !prev)}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              showLandmarkGuides
+                ? "border-[#1D4ED8] bg-[#EFF6FF] text-[#1D4ED8]"
+                : "border-[#E4E6EA] bg-white text-[#111315] hover:bg-[#F8F9FA]"
+            }`}
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            <span>Titik Tubuh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowSliders((prev) => !prev)}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              showSliders
+                ? "border-[#111315] bg-[#111315] text-white"
+                : "border-[#E4E6EA] bg-white text-[#111315] hover:bg-[#F8F9FA]"
+            }`}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>Bentuk Kontur</span>
+          </button>
+        </div>
       </div>
 
-      {/* Fine-Tuning Manual Sliders */}
+      {/* Fine-Tuning Contour Sliders */}
       {showSliders && (
         <div className="grid grid-cols-1 gap-3 rounded-lg border border-[#E4E6EA] bg-[#F8F9FA] p-4 sm:grid-cols-2">
           <div>
             <div className="flex justify-between text-xs text-[#4B5563]">
-              <span>Lebar Bahu & Badan</span>
+              <span>Lebar Pinggang Busana</span>
+              <span className="font-mono tabular-nums">
+                {Math.round(anchors.landmarks.waistWidthPct)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={16}
+              max={46}
+              step={0.5}
+              value={anchors.landmarks.waistWidthPct}
+              onChange={(e) => updateLandmark("waistWidthPct", Number(e.target.value))}
+              className="mt-1.5 w-full accent-[#1D4ED8] cursor-pointer"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs text-[#4B5563]">
+              <span>Lebar Pinggul Busana</span>
+              <span className="font-mono tabular-nums">
+                {Math.round(anchors.landmarks.hipWidthPct)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={20}
+              max={48}
+              step={0.5}
+              value={anchors.landmarks.hipWidthPct}
+              onChange={(e) => updateLandmark("hipWidthPct", Number(e.target.value))}
+              className="mt-1.5 w-full accent-[#1D4ED8] cursor-pointer"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs text-[#4B5563]">
+              <span>Skala Lebar Bahu</span>
               <span className="font-mono tabular-nums">{anchors.widthScalePct}%</span>
             </div>
             <input
               type="range"
-              min={65}
+              min={68}
               max={130}
               value={anchors.widthScalePct}
               onChange={(e) => onChangeAnchors({ ...anchors, widthScalePct: Number(e.target.value) })}
@@ -263,28 +344,30 @@ export function StudioCanvas({
 
           <div>
             <div className="flex justify-between text-xs text-[#4B5563]">
-              <span>Panjang Busana</span>
+              <span>Panjang Bawah (Hem)</span>
               <span className="font-mono tabular-nums">{anchors.heightScalePct}%</span>
             </div>
             <input
               type="range"
-              min={70}
-              max={130}
+              min={72}
+              max={128}
               value={anchors.heightScalePct}
-              onChange={(e) => onChangeAnchors({ ...anchors, heightScalePct: Number(e.target.value) })}
+              onChange={(e) =>
+                onChangeAnchors({ ...anchors, heightScalePct: Number(e.target.value) })
+              }
               className="mt-1.5 w-full accent-[#1D4ED8] cursor-pointer"
             />
           </div>
 
           <div>
             <div className="flex justify-between text-xs text-[#4B5563]">
-              <span>Posisi Vertikal (Bahu)</span>
+              <span>Posisi Vertikal (Kerah)</span>
               <span className="font-mono tabular-nums">{anchors.offsetYPct}%</span>
             </div>
             <input
               type="range"
               min={-15}
-              max={20}
+              max={18}
               value={anchors.offsetYPct}
               onChange={(e) => onChangeAnchors({ ...anchors, offsetYPct: Number(e.target.value) })}
               className="mt-1.5 w-full accent-[#1D4ED8] cursor-pointer"
@@ -313,7 +396,7 @@ export function StudioCanvas({
               className="flex items-center gap-1.5 text-xs font-medium text-[#4B5563] hover:text-[#111315] cursor-pointer"
             >
               <RotateCcw className="h-3 w-3" />
-              <span>Reset Posisi Default</span>
+              <span>Reset Kontur Sesuai Profil Tubuh</span>
             </button>
           </div>
         </div>
@@ -328,7 +411,7 @@ export function StudioCanvas({
           className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#1D4ED8] px-4 py-3 text-xs font-semibold text-white transition-colors hover:bg-[#1E40AF] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer whitespace-nowrap"
         >
           <Sparkles className="h-4 w-4 shrink-0" />
-          <span>{isGeneratingFit ? "Menyesuaikan Fitting..." : "Kalibrasi & Fitting AI"}</span>
+          <span>{isGeneratingFit ? "Menyesuaikan Kontur..." : "Sesuaikan Pas di Tubuh AI"}</span>
         </button>
 
         <button

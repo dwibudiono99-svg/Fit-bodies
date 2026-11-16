@@ -78,6 +78,40 @@ function formatGeminiError(err: unknown): { status: number; message: string } {
   };
 }
 
+const LANDMARKS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    neckY: { type: Type.NUMBER, description: "Posisi vertikal pangkal leher dari atas gambar (12-26)." },
+    leftShoulderX: { type: Type.NUMBER, description: "Posisi horizontal bahu kiri model pada gambar (22-44)." },
+    leftShoulderY: { type: Type.NUMBER, description: "Posisi vertikal bahu kiri model pada gambar (15-30)." },
+    rightShoulderX: { type: Type.NUMBER, description: "Posisi horizontal bahu kanan model pada gambar (56-78)." },
+    rightShoulderY: { type: Type.NUMBER, description: "Posisi vertikal bahu kanan model pada gambar (15-30)." },
+    chestWidthPct: { type: Type.NUMBER, description: "Lebar dada tubuh dalam % lebar gambar (22-48)." },
+    waistY: { type: Type.NUMBER, description: "Posisi vertikal pinggang dalam % tinggi gambar (34-52)." },
+    waistWidthPct: { type: Type.NUMBER, description: "Lebar pinggang tubuh dalam % lebar gambar (18-46)." },
+    hipY: { type: Type.NUMBER, description: "Posisi vertikal pinggul dalam % tinggi gambar (46-64)." },
+    hipWidthPct: { type: Type.NUMBER, description: "Lebar pinggul tubuh dalam % lebar gambar (22-50)." },
+    hemY: { type: Type.NUMBER, description: "Posisi vertikal ujung bawah celana/rok dalam % tinggi gambar (76-96)." },
+    brightness: { type: Type.NUMBER, description: "Penyesuaian kecerahan pencahayaan foto (0.85-1.15)." },
+    contrast: { type: Type.NUMBER, description: "Penyesuaian kontras foto (0.9-1.15)." },
+  },
+  required: [
+    "neckY",
+    "leftShoulderX",
+    "leftShoulderY",
+    "rightShoulderX",
+    "rightShoulderY",
+    "chestWidthPct",
+    "waistY",
+    "waistWidthPct",
+    "hipY",
+    "hipWidthPct",
+    "hemY",
+    "brightness",
+    "contrast",
+  ],
+};
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: "15mb" }));
@@ -90,30 +124,28 @@ async function startServer() {
       const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [];
       const resolvedModelImg = resolveImageInput(modelImage);
       if (resolvedModelImg) {
-        parts.push({
-          inlineData: resolvedModelImg,
-        });
+        parts.push({ inlineData: resolvedModelImg });
       }
 
-      const prompt = `Anda adalah penjahit ahli (master tailor) dan penata busana profesional Indonesia.
-Analisislah profil tubuh dan foto model (jika disertakan) berikut untuk kalibrasi studio fitting pakaian:
-- Jenis Siluet: ${profile?.gender === "wanita" ? "Wanita" : "Pria"}
+      const prompt = `Anda adalah master tailor (penjahit ahli) dan sistem pengukur anatomi tubuh berbasis visi komputer.
+Perhatikan foto model yang dilampirkan (jika ada) serta data kondisi tubuh berikut:
+- Siluet Dasar: ${profile?.gender === "wanita" ? "Wanita" : "Pria"}
 - Bentuk Tubuh: ${profile?.bodyShape ?? "proporsional"}
+- Kondisi Tubuh Khusus: ${profile?.bodyCondition ?? "standar"}
 - Tinggi Badan: ${profile?.heightCm ?? 170} cm
 - Berat Badan: ${profile?.weightKg ?? 65} kg
-- Ukuran Standar: ${profile?.size ?? "M"}
+- Ukuran: ${profile?.size ?? "M"}
 - Preferensi Potongan: ${profile?.fitPreference ?? "regular"}
-- Konteks Acara: ${occasion ?? "resmi-biasa"} (Pilihan: bepergian, resmi-biasa, kedinasan)
-- Busana yang Sedang Dicoba: ${garmentTitle ?? "Setelan Studio"} (${garmentCategory ?? occasion})
+- Acara Tujuan: ${occasion ?? "resmi-biasa"}
+- Busana: ${garmentTitle ?? "Setelan Studio"} (${garmentCategory ?? occasion})
 
-Tugas Anda:
-1. Jika foto model disertakan, perkirakan koordinat jangkar proporsi tubuh pada kanvas foto dalam persen (0–100):
-   - centerX: posisi horizontal tengah tubuh (biasanya sekitar 50)
-   - shoulderY: posisi vertikal garis bahu dari atas gambar dalam % (biasanya 18–28)
-   - shoulderWidthPct: lebar bahu relatif terhadap lebar gambar dalam % (biasanya 28–48)
-   - torsoHeightPct: tinggi area pakaian dari bahu ke ujung bawah celana/rok dalam % (biasanya 50–70)
-   - waistTaperRatio: rasio kelangsingan pinggang (0.82 untuk atletis/jam pasir, 0.94 untuk regular, 1.04 untuk berisi)
-2. Berikan spesifikasi jahitan (tailoringSpecs) dan panduan acara (occasionGuidance) dalam Bahasa Indonesia yang ringkas, elegan, dan langsung dapat dipraktikkan.`;
+Tugas kritis Anda:
+1. Deteksi koordinat anatomi tubuh model pada gambar dalam persen (0-100) agar mesin mesh-warping dapat membentuk pakaian MENEMPEL PAS mengikuti kontur tubuh dan kemiringan bahu model:
+   - neckY: titik pangkal leher agar wajah & leher tetap terbuka alami (biasanya 15-21)
+   - leftShoulderX & leftShoulderY, rightShoulderX & rightShoulderY: titik ujung bahu kiri dan kanan (perhatikan jika bahu miring atau posisi subjek tidak tepat di tengah)
+   - chestWidthPct, waistY, waistWidthPct, hipY, hipWidthPct, hemY: ukur proporsi dada, pinggang, dan pinggul sesuai foto dan kondisi tubuh (misal: jika berisi/perut-berisi maka waistWidthPct lebih lebar; jika atletis/jam-pasir maka waistWidthPct lebih ramping dari chestWidthPct dan hipWidthPct; jika torso-pendek maka waistY lebih tinggi).
+   - brightness & contrast: sesuaikan dengan pencahayaan foto asli model.
+2. Berikan analisis penjahitan profesional dan panduan acara dalam Bahasa Indonesia.`;
 
       parts.push({ text: prompt });
 
@@ -125,21 +157,8 @@ Tugas Anda:
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              silhouetteSummary: {
-                type: Type.STRING,
-                description: "Ringkasan analisis proporsi tubuh dan siluet dalam 2 kalimat Bahasa Indonesia.",
-              },
-              anchors: {
-                type: Type.OBJECT,
-                properties: {
-                  centerX: { type: Type.NUMBER },
-                  shoulderY: { type: Type.NUMBER },
-                  shoulderWidthPct: { type: Type.NUMBER },
-                  torsoHeightPct: { type: Type.NUMBER },
-                  waistTaperRatio: { type: Type.NUMBER },
-                },
-                required: ["centerX", "shoulderY", "shoulderWidthPct", "torsoHeightPct", "waistTaperRatio"],
-              },
+              silhouetteSummary: { type: Type.STRING },
+              landmarks: LANDMARKS_SCHEMA,
               tailoringSpecs: {
                 type: Type.OBJECT,
                 properties: {
@@ -168,7 +187,7 @@ Tugas Anda:
             },
             required: [
               "silhouetteSummary",
-              "anchors",
+              "landmarks",
               "tailoringSpecs",
               "occasionGuidance",
               "recommendedColorways",
@@ -195,25 +214,24 @@ Tugas Anda:
       const resolvedModel = resolveImageInput(modelImage);
       const resolvedGarment = resolveImageInput(garmentImage);
 
-      if (resolvedModel) {
-        parts.push({ inlineData: resolvedModel });
-      }
-      if (resolvedGarment) {
-        parts.push({ inlineData: resolvedGarment });
-      }
+      if (resolvedModel) parts.push({ inlineData: resolvedModel });
+      if (resolvedGarment) parts.push({ inlineData: resolvedGarment });
 
-      const prompt = `Anda adalah sistem kalibrasi fitting busana studio RupaFit.
-Gambar pertama adalah foto model/pengguna; gambar kedua adalah referensi pakaian (jika tersedia).
-Data bentuk tubuh pengguna:
+      const prompt = `Anda adalah AI Tailoring & Mesh Calibration RupaFit Studio.
+Gambar 1 adalah foto orang/model yang akan mengenakan busana; Gambar 2 adalah foto busana (jika tersedia).
+Profil & kondisi tubuh pengguna:
 - Siluet: ${profile?.gender ?? "pria"}
 - Bentuk Tubuh: ${profile?.bodyShape ?? "proporsional"}
+- Kondisi Tubuh Khusus: ${profile?.bodyCondition ?? "standar"}
 - Tinggi: ${profile?.heightCm ?? 172} cm, Berat: ${profile?.weightKg ?? 68} kg, Ukuran: ${profile?.size ?? "M"}
 - Preferensi Potongan: ${profile?.fitPreference ?? "regular"}
 - Acara Tujuan: ${occasion ?? "resmi-biasa"}
 - Pakaian: ${garmentTitle ?? "Busana Pilihan"} — ${garmentDescription ?? ""}
-- Catatan Tambahan Pengguna: ${customNotes || "Tidak ada"}
+- Catatan Pengguna: ${customNotes || "Tidak ada"}
 
-Hitung parameter penyesuaian fitting agar pakaian tampak pas mengikuti postur foto model dan berikan catatan evaluasi jahitan serta daftar padu-padan lengkap untuk acara tersebut.`;
+Tugas Anda:
+1. Hitung titik anatomi 'landmarks' yang presisi terhadap tubuh pada Gambar 1 agar pakaian dapat di-warp mengikuti lekuk bahu, dada, pinggang, pinggul, serta kemiringan postur tubuh pengguna sehingga terlihat pas menempel di badan.
+2. Hitung parameter 'calibration' tambahan dan berikan evaluasi kesesuaian pakaian terhadap kondisi tubuh beserta daftar padu padan lengkap dalam Bahasa Indonesia.`;
 
       parts.push({ text: prompt });
 
@@ -225,22 +243,23 @@ Hitung parameter penyesuaian fitting agar pakaian tampak pas mengikuti postur fo
           responseSchema: {
             type: Type.OBJECT,
             properties: {
+              landmarks: LANDMARKS_SCHEMA,
               calibration: {
                 type: Type.OBJECT,
                 properties: {
-                  offsetXPct: { type: Type.NUMBER, description: "Geser horizontal dari -15 sampai 15" },
-                  offsetYPct: { type: Type.NUMBER, description: "Geser vertikal dari -15 sampai 15" },
-                  widthScalePct: { type: Type.NUMBER, description: "Skala lebar pakaian 65 sampai 135" },
-                  heightScalePct: { type: Type.NUMBER, description: "Skala tinggi pakaian 70 sampai 130" },
-                  fitTightness: { type: Type.STRING, description: "Salah satu: slim, regular, relaxed" },
-                  drapeShadow: { type: Type.NUMBER, description: "Intensitas bayangan drape 0.1 sampai 0.5" },
+                  offsetXPct: { type: Type.NUMBER },
+                  offsetYPct: { type: Type.NUMBER },
+                  widthScalePct: { type: Type.NUMBER },
+                  heightScalePct: { type: Type.NUMBER },
+                  fitTightness: { type: Type.STRING },
+                  drapeShadow: { type: Type.NUMBER },
                 },
                 required: ["offsetXPct", "offsetYPct", "widthScalePct", "heightScalePct", "fitTightness", "drapeShadow"],
               },
               fitAssessment: {
                 type: Type.OBJECT,
                 properties: {
-                  fitVerdict: { type: Type.STRING, description: "Label kesesuaian singkat, misal: Pas di Bahu & Rapi" },
+                  fitVerdict: { type: Type.STRING },
                   proportionNote: { type: Type.STRING },
                   alterationAdvice: { type: Type.STRING },
                 },
@@ -259,7 +278,7 @@ Hitung parameter penyesuaian fitting agar pakaian tampak pas mengikuti postur fo
                 },
               },
             },
-            required: ["calibration", "fitAssessment", "pairingChecklist"],
+            required: ["landmarks", "calibration", "fitAssessment", "pairingChecklist"],
           },
         },
       });
@@ -280,7 +299,7 @@ Hitung parameter penyesuaian fitting agar pakaian tampak pas mengikuti postur fo
       const prompt = `Buat panduan referensi busana dan daftar bawaan ringkas dalam Bahasa Indonesia untuk agenda berikut:
 - Konteks Acara: ${occasion}
 - Agenda / Tujuan Spesifik: ${destinationOrAgenda || "Perjalanan dinas / pertemuan penting"}
-- Profil Pemakai: ${profile?.gender ?? "pria"}, tinggi ${profile?.heightCm ?? 170} cm, bentuk tubuh ${profile?.bodyShape ?? "proporsional"}
+- Profil Pemakai: ${profile?.gender ?? "pria"}, tinggi ${profile?.heightCm ?? 170} cm, bentuk tubuh ${profile?.bodyShape ?? "proporsional"}, kondisi ${profile?.bodyCondition ?? "standar"}
 - Busana Utama: ${garmentTitle ?? "Setelan Tailored"}
 
 Berikan rekomendasi sepatu, aksesori jam/tas, perawatan bahan agar tidak kusut, dan alternatif cadangan.`;
