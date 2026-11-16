@@ -291,8 +291,15 @@ export function BodyProfilePanel({
       </button>
 
       {analysisError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {analysisError}
+        <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+          <span>{analysisError}</span>
+          <button
+            type="button"
+            onClick={onAnalyzeBody}
+            className="w-fit font-semibold text-red-800 underline hover:text-red-950 cursor-pointer"
+          >
+            Coba Lagi
+          </button>
         </div>
       )}
 

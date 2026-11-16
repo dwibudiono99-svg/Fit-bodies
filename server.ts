@@ -58,23 +58,104 @@ function resolveImageInput(imageUrlOrData: string | undefined): { data: string; 
   return null;
 }
 
-function formatGeminiError(err: unknown): { status: number; message: string } {
+function isTransientGeminiError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes("API_KEY_INVALID") || msg.includes("PERMISSION_DENIED") || msg.includes("403")) {
+  return (
+    msg.includes("503") ||
+    msg.includes("UNAVAILABLE") ||
+    msg.includes("high demand") ||
+    msg.includes("429") ||
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("fetch failed")
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateContentWithResilience(
+  ai: GoogleGenAI,
+  contents: unknown,
+  config: Record<string, unknown>
+) {
+  const candidateModels = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+  let lastError: unknown;
+
+  for (const model of candidateModels) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await ai.models.generateContent({
+          model,
+          contents: contents as never,
+          config: config as never,
+        });
+      } catch (err) {
+        lastError = err;
+        if (!isTransientGeminiError(err)) {
+          throw err;
+        }
+        await sleep(750 * (attempt + 1));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function formatGeminiError(err: unknown): { status: number; message: string } {
+  const rawMsg = err instanceof Error ? err.message : String(err);
+  let parsedCode: number | undefined;
+  let parsedStatus = "";
+
+  try {
+    const jsonStart = rawMsg.indexOf("{");
+    if (jsonStart !== -1) {
+      const parsed = JSON.parse(rawMsg.slice(jsonStart));
+      parsedCode = parsed?.error?.code;
+      parsedStatus = parsed?.error?.status ?? "";
+    }
+  } catch {
+    // Ignore non-JSON error messages
+  }
+
+  if (
+    parsedCode === 403 ||
+    parsedCode === 400 ||
+    rawMsg.includes("API_KEY_INVALID") ||
+    rawMsg.includes("PERMISSION_DENIED")
+  ) {
     return {
       status: 403,
-      message: "Kunci API Gemini belum valid atau tidak memiliki izin. Silakan periksa panel Settings > Secrets.",
+      message:
+        "Kunci API Gemini belum valid atau tidak memiliki izin. Silakan periksa panel Settings > Secrets.",
     };
   }
-  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+  if (parsedCode === 429 || rawMsg.includes("RESOURCE_EXHAUSTED") || rawMsg.includes("429")) {
     return {
       status: 429,
-      message: "Kuota permintaan AI sedang penuh. Silakan tunggu beberapa saat sebelum mencoba kembali.",
+      message:
+        "Kuota permintaan AI sedang penuh. Silakan tunggu beberapa saat sebelum mencoba kembali.",
+    };
+  }
+  if (
+    parsedCode === 503 ||
+    parsedStatus === "UNAVAILABLE" ||
+    rawMsg.includes("503") ||
+    rawMsg.includes("UNAVAILABLE") ||
+    rawMsg.includes("high demand")
+  ) {
+    return {
+      status: 503,
+      message:
+        "Server AI sedang mengalami lonjakan trafik sementara. Silakan klik coba lagi dalam beberapa detik.",
     };
   }
   return {
     status: 500,
-    message: msg || "Terjadi kendala saat memproses kalibrasi AI di server.",
+    message: "Terjadi kendala sementara saat memproses kalibrasi AI. Silakan coba lagi.",
   };
 }
 
@@ -149,10 +230,10 @@ Tugas kritis Anda:
 
       parts.push({ text: prompt });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-4-hydrogen",
-        contents: { parts },
-        config: {
+      const response = await generateContentWithResilience(
+        ai,
+        { parts },
+        {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -193,8 +274,8 @@ Tugas kritis Anda:
               "recommendedColorways",
             ],
           },
-        },
-      });
+        }
+      );
 
       const parsed = JSON.parse((response.text ?? "{}").trim());
       res.json(parsed);
@@ -235,10 +316,10 @@ Tugas Anda:
 
       parts.push({ text: prompt });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-4-hydrogen",
-        contents: { parts },
-        config: {
+      const response = await generateContentWithResilience(
+        ai,
+        { parts },
+        {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -280,8 +361,8 @@ Tugas Anda:
             },
             required: ["landmarks", "calibration", "fitAssessment", "pairingChecklist"],
           },
-        },
-      });
+        }
+      );
 
       const parsed = JSON.parse((response.text ?? "{}").trim());
       res.json(parsed);
@@ -304,22 +385,18 @@ Tugas Anda:
 
 Berikan rekomendasi sepatu, aksesori jam/tas, perawatan bahan agar tidak kusut, dan alternatif cadangan.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-4-hydrogen",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              headline: { type: Type.STRING },
-              footwear: { type: Type.STRING },
-              accessories: { type: Type.STRING },
-              garmentCare: { type: Type.STRING },
-              backupItem: { type: Type.STRING },
-            },
-            required: ["headline", "footwear", "accessories", "garmentCare", "backupItem"],
+      const response = await generateContentWithResilience(ai, prompt, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            headline: { type: Type.STRING },
+            footwear: { type: Type.STRING },
+            accessories: { type: Type.STRING },
+            garmentCare: { type: Type.STRING },
+            backupItem: { type: Type.STRING },
           },
+          required: ["headline", "footwear", "accessories", "garmentCare", "backupItem"],
         },
       });
 
